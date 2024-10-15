@@ -5,8 +5,6 @@ namespace WebApplication1.Models.Db;
 
 public partial class Banner
 {
-    public int Id { get; set; }
-
     public string? Title { get; set; }
 
     public string? SubTitlle { get; set; }
@@ -18,4 +16,6 @@ public partial class Banner
     public string? Link { get; set; }
 
     public string? Position { get; set; }
+
+    public int Id { get; set; }
 }
