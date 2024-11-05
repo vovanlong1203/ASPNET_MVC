@@ -26,6 +26,24 @@ namespace WebApplication1.Areas.Admin.Controllers
             return View(await _context.Products.ToListAsync());
         }
 
+        public IActionResult DeleteGallery(int id)
+        {
+            var gallery = _context.ProductGaleries.FirstOrDefault(g => g.Id == id);
+            if (gallery == null)
+                return NotFound();
+            string d = Directory.GetCurrentDirectory();
+            string fn = d + "\\wwwroot\\images\\products" + gallery.ImageName;
+
+            if (System.IO.File.Exists(fn))
+            {
+                System.IO.File.Delete(fn);
+            }
+            _context.Remove(gallery);
+            _context.SaveChanges();
+
+            return Redirect("edit/" + gallery.ProductId);
+        }
+
         // GET: Admin/Products/Details/5
         public async Task<IActionResult> Details(int? id)
         {
@@ -92,13 +110,14 @@ namespace WebApplication1.Areas.Admin.Controllers
 
                         using (var stream = new FileStream(ImagePath, FileMode.Create))
                         {
-                            item.CopyTo(stream);
+                             item.CopyTo(stream); 
                         }
 
                         _context.ProductGaleries.Add(newGallery);
-                        await _context.SaveChangesAsync();
                     }
                 }
+                await _context.SaveChangesAsync();
+
 
                 //===============================
                 return RedirectToAction(nameof(Index));
@@ -119,6 +138,8 @@ namespace WebApplication1.Areas.Admin.Controllers
             {
                 return NotFound();
             }
+            ViewData["gallery"] = _context.ProductGaleries.Where(x => x.ProductId == product.Id).ToList();
+
             return View(product);
         }
 
@@ -127,7 +148,7 @@ namespace WebApplication1.Areas.Admin.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,FullDesc,Discount,ImageName,Qty,Tags,VideoUrl,Price")] Product product)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Description,FullDesc,Discount,ImageName,Qty,Tags,VideoUrl,Price")] Product product, IFormFile? MainImage, IFormFile[]? GalleryImages)
         {
             if (id != product.Id)
             {
@@ -138,6 +159,50 @@ namespace WebApplication1.Areas.Admin.Controllers
             {
                 try
                 {
+                    // Save main image
+                    if (MainImage != null)
+                    {
+                        string directoryPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products/");
+                        string imageName = Guid.NewGuid().ToString() + Path.GetExtension(MainImage.FileName);
+                        string imagePath = Path.Combine(directoryPath, imageName);
+
+                        string oldImagePath = Path.Combine(directoryPath, product.ImageName);
+                        if (System.IO.File.Exists(oldImagePath))
+                        {
+                            System.IO.File.Delete(oldImagePath);
+                        }
+
+                        using (var stream = new FileStream(imagePath, FileMode.Create))
+                        {
+                            await MainImage.CopyToAsync(stream);
+                        }
+
+                        product.ImageName = imageName; // Save only the file name
+                    }
+
+                    // Save gallery images
+                    if (GalleryImages != null)
+                    {
+                        foreach (var item in GalleryImages)
+                        {
+                            string galleryImageName = Guid.NewGuid().ToString() + Path.GetExtension(item.FileName);
+                            string galleryImagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/images/products/", galleryImageName);
+
+                            using (var stream = new FileStream(galleryImagePath, FileMode.Create))
+                            {
+                                await item.CopyToAsync(stream);
+                            }
+
+                            var galleryItem = new ProductGalery
+                            {
+                                ProductId = product.Id,
+                                ImageName = galleryImageName // Save only the file name
+                            };
+
+                            _context.ProductGaleries.Add(galleryItem);
+                        }
+                    }
+
                     _context.Update(product);
                     await _context.SaveChangesAsync();
                 }
@@ -156,6 +221,7 @@ namespace WebApplication1.Areas.Admin.Controllers
             }
             return View(product);
         }
+
 
         // GET: Admin/Products/Delete/5
         public async Task<IActionResult> Delete(int? id)
@@ -183,8 +249,39 @@ namespace WebApplication1.Areas.Admin.Controllers
             var product = await _context.Products.FindAsync(id);
             if (product != null)
             {
+
+                // ===================delete image================
+
+                string d = Directory.GetCurrentDirectory();
+                string fn = d + "\\wwwroot\\images\\products\\";
+                string mainImagePath = fn + product.ImageName;
+                if (System.IO.File.Exists(mainImagePath))
+                {
+                    System.IO.File.Delete(mainImagePath);
+                }
+
+                // ============delete image ================
+                var galleries = _context.ProductGaleries.Where(x => x.ProductId == id).ToList();
+                
+                if (galleries != null)
+                {
+                    foreach (var item in galleries)
+                    {
+                        string galleryImagePath = fn + item.ImageName;
+                        if (System.IO.File.Exists(galleryImagePath))
+                        {
+                            System.IO.File.Delete(galleryImagePath);
+                        }
+                    }
+                    _context.ProductGaleries.RemoveRange(galleries);
+                }
+
+
+                //================================
                 _context.Products.Remove(product);
             }
+
+            
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
